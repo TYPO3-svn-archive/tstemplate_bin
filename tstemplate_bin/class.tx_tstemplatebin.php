@@ -37,6 +37,8 @@ class tx_tstemplatebin
     
     protected $_prefixWithId = false;
     
+    protected $_addComment = true;
+    
     protected $_id;
     
     /**
@@ -46,6 +48,27 @@ class tx_tstemplatebin
         'constants' => 'constants',
         'config' => 'setup'
     );
+    
+    public function __construct()
+    {
+        $conf = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['tstemplate_bin']);
+        if (!is_array($conf))
+        {
+            return;
+        }
+        if (!empty($conf['path']))
+        {
+            $this->_path = $conf['path'];
+        }
+        if (isset($conf['prefixWithId']))
+        {
+            $this->_prefixWithId = $conf['prefixWithId'] ? true : false;
+        }
+        if (isset($conf['addComment']))
+        {
+            $this->_addComment = $conf['addComment'] ? true : false;
+        }
+    }
     
 	/**
 	 * Hook-function:
