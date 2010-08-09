@@ -1,0 +1,8 @@
+# cat=basic; type=string; label=Template directory relative to root path
+path = fileadmin/template/ts/
+
+# cat=basic; type=boolean; label=Prefix template directories with the template-id
+prefixWithId = 0
+
+# cat=basic; type=boolean; label=Add file comments on first save
+addComment = 1
