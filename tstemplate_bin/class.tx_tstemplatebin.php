@@ -33,13 +33,30 @@
  */
 class tx_tstemplatebin
 {
+    /**
+     * @var string The path where the template dirs will be created
+     */
     protected $_path = 'fileadmin/template/ts/';
     
+    /**
+     * @var boolean If template dirs should get prefixed with the template-uid
+     */
     protected $_prefixWithId = false;
     
+    /**
+     * @var boolean If comments should be added on first file creation
+     */
     protected $_addComment = true;
     
+    /**
+     * @var integer The current template-uid
+     */
     protected $_id;
+    
+    /**
+     * @var array The current record
+     */
+    protected $_current;
     
     /**
      * @var array Field names as keys, file names as values
@@ -49,6 +66,9 @@ class tx_tstemplatebin
         'config' => 'setup'
     );
     
+    /**
+     * Set the vars from extConf
+     */
     public function __construct()
     {
         $conf = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['tstemplate_bin']);
@@ -82,16 +102,29 @@ class tx_tstemplatebin
 	    $this->_id = $parameters['tplRow']['uid'];
 	    $dirname = $this->_getDirname($parameters['tplRow']['title']);
 	    
-	    foreach ($this->_fields as $field => $file)
+	    $startLen = strlen($parameters['theOutput']);
+        foreach ($this->_fields as $field => $file)
 	    {
-	        if (array_key_exists($field, $parameters['e']))
+	        if ($weCan = array_key_exists($field, $parameters['e']))
 	        {
+	            $templateFile = $dirname.$file.'.txt';
 	            $parameters['theOutput'] = $this->_includeBinFile(
 	                $parameters['theOutput'],
-	                $dirname.$file.'.txt',
+	                $templateFile,
 	                true
 	            );
 	        }
+	    }
+	    if (strlen($parameters['theOutput']) == $startLen && $weCan && $this->_addComment)
+	    {
+	        // There is no file yet, add content if enabled in extConf:
+	        $parameters['theOutput'] = preg_replace(
+	            '/\<textarea([^\>]*)\>/',
+	            '<textarea$1>'.t3lib_div::formatForTextarea(
+	                $this->_getFileComment(array('templateFile'=>$templateFile))
+	            ),
+	            $parameters['theOutput']
+	        );
 	    }
 	}
 	
@@ -114,7 +147,7 @@ class tx_tstemplatebin
 	    $pattern = '/\<INCLUDE_TYPOSCRIPT\:\s+source\="\s*FILE\:\s*'.addcslashes($file,'/\\').'\s*"\s*\>/i';
 	    if ($hsc)
 	    {
-	        $pattern = str_replace(array('\<','\>','"'), array('&lt;','&gt;','&quot;'), $pattern);
+	        $pattern = str_replace(array('\<','\>','"'), array('\n&lt;','&gt;','&quot;'), $pattern);
 	        //$pattern = '/&lt;INCLUDE_TYPOSCRIPT:\s+source=&quot;\s*FILE:\s*(.*?)\s*&quot;\s*&gt;/i';
 	    }
 	    if (preg_match($pattern, $code, $match, PREG_OFFSET_CAPTURE))
@@ -123,7 +156,7 @@ class tx_tstemplatebin
 		        
 	        $content = file_exists($file) ? t3lib_div::formatForTextarea(file_get_contents($file)) : '';
 		        
-		    return substr_replace($code, ltrim($content), $match[0][1], strlen($match[0][0]));
+		    return substr_replace($code, $content, $match[0][1], strlen($match[0][0]));
 		}
 		return $code;
 	}
@@ -138,8 +171,7 @@ class tx_tstemplatebin
 	    {	        
 	        $this->_id = (integer) $uid;
 	        
-	        $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery('title', $table, 'uid='.$this->_id);
-		    $current = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res);
+	        $current = $this->_getCurrent();
 	        
 		    if (isset($fields['title']) && strlen($current['title']) && strcasecmp($current['title'], $fields['title']) !== 0)
 		    {
@@ -193,6 +225,20 @@ class tx_tstemplatebin
 	    }
 	}
 	
+	protected function _getCurrent()
+	{
+	    if (!$this->_id)
+	    {
+	        return array();
+	    }
+	    if (!is_array($this->_current))
+	    {
+    	    $res = $GLOBALS['TYPO3_DB']->exec_SELECTquery('*', 'sys_template', 'uid='.$this->_id);
+    		$this->_current = $GLOBALS['TYPO3_DB']->sql_fetch_assoc($res);
+	    }
+		return $this->_current;
+	}
+	
 	protected function _checkTitle($title, $notify = false)
 	{
 	    if ($this->_prefixWithId)
@@ -232,10 +278,9 @@ class tx_tstemplatebin
 	            $strlen = strlen(trim($fields[$field]));
 		        if ($strlen || file_exists(PATH_site.$filename))
 		        {
-		            t3lib_div::writeFile(PATH_site.$filename, $fields[$field]);
+		            $ok = t3lib_div::writeFile(PATH_site.$filename, $fields[$field]);
 		        }
-		        
-		        if ($strlen)
+		        if ($strlen && $ok)
 		        {
 		            //Only include when not empty (for performance reasons)
 		            $newFields[$field] = "<INCLUDE_TYPOSCRIPT: source=\"FILE:{$filename}\">";
@@ -244,6 +289,34 @@ class tx_tstemplatebin
 	    }
 	    
 	    return $newFields;
+	}
+	
+	protected function _getFileComment($addParams = array())
+	{
+	    if (!$this->_addComment)
+	    {
+	        return '';
+	    }
+	    $row = $this->_getCurrent();
+	    $row['rootLine'] = '';
+	    
+	    $rootline = array_reverse(t3lib_BEfunc::BEgetRootLine($row['pid']));
+	    array_shift($rootline);
+	    foreach ($rootline as $page)
+	    {
+	        $row['rootLine'] .= '/'.$page['title'];
+	    }
+	    $row = array_merge($row, $addParams);
+	    
+	    $cTemplate = $GLOBALS['TYPO3_CONF_VARS']['EXTCONF']['tstemplate_bin']['fileComment'];
+	    if (preg_match_all('/\$\{([A-Za-z_]*)\}/', $cTemplate, $matches, PREG_SET_ORDER))
+	    {
+    	    foreach ($matches as $match)
+    	    {
+    	    	$cTemplate = str_replace($match[0], $row[$match[1]], $cTemplate);
+    	    }
+	    }
+	    return $cTemplate;
 	}
 	
 	/**
