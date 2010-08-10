@@ -109,7 +109,7 @@ page.10.value = HELLO WORLD!
 	/**
 	 * Hook-function for tx_tstemplateinfo:
 	 * Search for TS-includes in textareas for template module info/modify
-	 * Adds a file comment if no file was found.
+	 * Adds file comment if enabled in extConf and no include was found
 	 * @see _includeBinFile()
 	 * @see ext_localconf.php
 	 * 
@@ -121,11 +121,12 @@ page.10.value = HELLO WORLD!
 	    $this->_id = $parameters['tplRow']['uid'];
 	    $dirname = $this->_getDir($parameters['tplRow']['title']);
 	    
-	    $startLen = strlen($parameters['theOutput']);
+	    $start = $parameters['theOutput'];
         foreach ($this->_fields as $field => $file)
 	    {
-	        if ($weCan = array_key_exists($field, $parameters['e']))
+	        if (array_key_exists($field, $parameters['e']))
 	        {
+	            $weCan = true;
 	            $templateFile = $dirname.$file.$this->_fileExt;
 	            $parameters['theOutput'] = $this->_includeBinFile(
 	                $parameters['theOutput'],
@@ -134,9 +135,10 @@ page.10.value = HELLO WORLD!
 	            );
 	        }
 	    }
-	    if ($weCan && $this->_addComment && strlen($parameters['theOutput']) == $startLen)
+	    
+	    if ($weCan && $this->_addComment && strcmp($parameters['theOutput'], $start) == 0)
 	    {
-	        // There is no file yet, add content if enabled in extConf:
+	        // There is no file yet, add comment if enabled in extConf:
 	        $parameters['theOutput'] = preg_replace(
 	            '/\<textarea([^\>]*)\>/',
 	            '<textarea$1>'.t3lib_div::formatForTextarea(
@@ -185,18 +187,52 @@ page.10.value = HELLO WORLD!
 	    $pattern = '/\<INCLUDE_TYPOSCRIPT\:\s+source\="\s*FILE\:\s*'.addcslashes($file,'/\\').'\s*"\s*\>/i';
 	    if ($hsc)
 	    {
-	        $pattern = str_replace(array('\<','\>','"'), array('\n&lt;','&gt;','&quot;'), $pattern);
+	        $pattern = str_replace(array('\<','\>','"'), array('[\n\r]*&lt;','&gt;','&quot;'), $pattern);
 	        //$pattern = '/&lt;INCLUDE_TYPOSCRIPT:\s+source=&quot;\s*FILE:\s*(.*?)\s*&quot;\s*&gt;/i';
 	    }
 	    if (preg_match($pattern, $code, $match, PREG_OFFSET_CAPTURE))
 		{
-		    $file = t3lib_div::getFileAbsFileName($file);
-		        
-	        $content = file_exists($file) ? t3lib_div::formatForTextarea(file_get_contents($file)) : '';
+		    $content = t3lib_div::formatForTextarea($this->_readFile($file));
 		        
 		    return substr_replace($code, $content, $match[0][1], strlen($match[0][0]));
 		}
 		return $code;
+	}
+	
+	/**
+	 * Reads a template file and adds comment if enabled in extConf and it's 
+	 * empty, does not exist or is sample only.
+	 * 
+	 * @param string $file
+	 * @return string
+	 */
+	protected function _readFile($file)
+	{
+	    $path = t3lib_div::getFileAbsFileName($file);
+	    $addComment = $this->_addComment && $this->_isTemplateModule();
+	    $c = '';
+	    
+	    if (file_exists($path))
+	    {
+	        $c = file_get_contents($path);
+	        if ($addComment)
+	        {
+	            $str1 = preg_replace('/\r/','',$c);
+	            $str2 = preg_replace('/\r/','',self::TS_SAMPLE);
+	            
+	            if (strcmp($str1, $str2) == 0)
+	            {
+	                $c = 
+	                $this->_getFileComment(array('templateFile' => $file)).
+	                ltrim(self::TS_SAMPLE);
+	            }
+	        }
+	    }
+	    if ($addComment && !strlen(trim($c)))
+	    {
+	        $c = $this->_getFileComment(array('templateFile' => $file));
+	    }
+	    return $c;
 	}
 	
 	/**
@@ -240,7 +276,7 @@ page.10.value = HELLO WORLD!
 	    }
 	    if ($status == 'new' && !$this->_checkTitle($fields['title']))
 	    {
-	        if (strpos($_SERVER['HTTP_REFERER'], t3lib_extMgm::extRelPath('tstemplate')) !== false)
+	        if ($this->_isTemplateModule())
 	        {
     	        // Called from Web->Template->Info/Modify
     	        // When adding templates there, title is automatically set by the
@@ -262,9 +298,18 @@ page.10.value = HELLO WORLD!
 	}
 	
 	/**
+	 * If we are in module web->template
+	 * 
+	 * @return boolean
+	 */
+	protected function _isTemplateModule()
+	{
+	    return strpos($_SERVER['REQUEST_URI'], t3lib_extMgm::extRelPath('tstemplate')) !== false;
+	}
+	
+	/**
 	 * Hook-function for t3lib_TCEmain:
 	 * Writes contents of fields in new rows to files and overrides the values for DB.
-	 * Adds file comment to config when this is the sample from tstemplate.
 	 * @see ext_localconf.php
 	 * 
 	 * @param string $status
@@ -278,15 +323,6 @@ page.10.value = HELLO WORLD!
 	    if ($table == 'sys_template' && $status == 'new' && isset($fields['title']))
 	    {
 	        $this->_id = (integer) $tce->substNEWwithIDs[$uid];
-	        
-    	    if (isset($fields['config']) && strcmp($fields['config'], self::TS_SAMPLE) == 0)
-    	    {
-                // This is the sample from tstemplate - add file comment
-    	        $templateFile = $this->_getDir($fields['title']).$this->_fields['config'].$this->_fileExt;
-    	        $fields['config'] =
-                $this->_getFileComment(array('templateFile' => $templateFile)).
-                ltrim(self::TS_SAMPLE);
-    	    }
 	        
     	    $newFields = $this->_processFields($fields['title'], $fields);
 	        if (count($newFields))
