@@ -33,6 +33,13 @@
  */
 class tx_tstemplatebin
 {
+    const TS_SAMPLE = '
+# Default PAGE object:
+page = PAGE
+page.10 = TEXT
+page.10.value = HELLO WORLD!
+';
+    
     /**
      * @var string The path where the template dirs will be created
      */
@@ -57,6 +64,11 @@ class tx_tstemplatebin
      * @var array The current record
      */
     protected $_current;
+    
+    /**
+     * @var string File extension for template files
+     */
+    protected $_fileExt = '.txt';
     
     /**
      * @var array Field names as keys, file names as values
@@ -88,26 +100,33 @@ class tx_tstemplatebin
         {
             $this->_addComment = $conf['addComment'] ? true : false;
         }
+        if (!empty($conf['fileExt']))
+        {
+            $this->_fileExt = '.'.ltrim($conf['fileExt'],'.');
+        }
     }
     
 	/**
-	 * Hook-function:
-	 * called in typo3/sysext/tstemplate_info/class.tx_tstemplateinfo.php
-	 *
+	 * Hook-function for tx_tstemplateinfo:
+	 * Search for TS-includes in textareas for template module info/modify
+	 * Adds a file comment if no file was found.
+	 * @see _includeBinFile()
+	 * @see ext_localconf.php
+	 * 
 	 * @param array $parameters
 	 * @param tx_tstemplateinfo $pObj
 	 */
 	public function postOutputProcessingHook($parameters, $pObj)
 	{		
 	    $this->_id = $parameters['tplRow']['uid'];
-	    $dirname = $this->_getDirname($parameters['tplRow']['title']);
+	    $dirname = $this->_getDir($parameters['tplRow']['title']);
 	    
 	    $startLen = strlen($parameters['theOutput']);
         foreach ($this->_fields as $field => $file)
 	    {
 	        if ($weCan = array_key_exists($field, $parameters['e']))
 	        {
-	            $templateFile = $dirname.$file.'.txt';
+	            $templateFile = $dirname.$file.$this->_fileExt;
 	            $parameters['theOutput'] = $this->_includeBinFile(
 	                $parameters['theOutput'],
 	                $templateFile,
@@ -115,33 +134,52 @@ class tx_tstemplatebin
 	            );
 	        }
 	    }
-	    if (strlen($parameters['theOutput']) == $startLen && $weCan && $this->_addComment)
+	    if ($weCan && $this->_addComment && strlen($parameters['theOutput']) == $startLen)
 	    {
 	        // There is no file yet, add content if enabled in extConf:
 	        $parameters['theOutput'] = preg_replace(
 	            '/\<textarea([^\>]*)\>/',
 	            '<textarea$1>'.t3lib_div::formatForTextarea(
-	                $this->_getFileComment(array('templateFile'=>$templateFile))
+	                $this->_getFileComment(array('templateFile' => $templateFile))
 	            ),
 	            $parameters['theOutput']
 	        );
 	    }
 	}
 	
+	/**
+	 * Hook-function for t3lib_TCEforms:
+	 * Override the TS-fields with content from bin files if any
+	 * @see _includeBinFile()
+	 * @see ext_localconf.php
+	 * 
+	 * @param string $table
+	 * @param array $row
+	 * @param t3lib_TCEforms $tce
+	 */
 	public function getMainFields_preProcess($table, &$row, t3lib_TCEforms $tce)
 	{
 	    if ($table == 'sys_template')
 	    {
 	        $this->_id = $row['uid'];
-	        $dirname = $this->_getDirname($row['title']);
+	        $dirname = $this->_getDir($row['title']);
 	        
 	        foreach ($this->_fields as $field => $file)
 	        {
-	            $row[$field] = $this->_includeBinFile($row[$field], $dirname.$file.'.txt');
+	            $row[$field] = $this->_includeBinFile($row[$field], $dirname.$file.$this->_fileExt);
 	        }
 	    }
 	}
 	
+	/**
+	 * Search for TS-includes of the $file - when found replaces this
+	 * with the contents of the TS-File (just once).
+	 * 
+	 * @param string $code The code to search in
+	 * @param string $file The file to match
+	 * @param boolean $hsc Use htmlspecialchars for pattern
+	 * @return string The code with replace include if any
+	 */
 	protected function _includeBinFile($code, $file, $hsc = false)
 	{
 	    $pattern = '/\<INCLUDE_TYPOSCRIPT\:\s+source\="\s*FILE\:\s*'.addcslashes($file,'/\\').'\s*"\s*\>/i';
@@ -161,6 +199,19 @@ class tx_tstemplatebin
 		return $code;
 	}
 	
+	/**
+	 * Hook-function for t3lib_TCEmain:
+	 * Writes contents of fields to files and overrides the values for DB.
+	 * Checks if title is valid, if not rewrites it and shows a flash message
+	 * or looks for the next valid name when in template module
+	 * @see ext_localconf.php
+	 * 
+	 * @param string $status
+	 * @param string $table
+	 * @param integer $uid
+	 * @param array $fields
+	 * @param t3lib_TCEmain $tce
+	 */
 	public function processDatamap_postProcessFieldArray($status, $table, $uid, &$fields, t3lib_TCEmain $tce)
 	{
 	    if ($table != 'sys_template')
@@ -177,7 +228,7 @@ class tx_tstemplatebin
 		    {
 		        if ($this->_checkTitle($fields['title'], true))
 		        {
-    		        t3lib_div::rmdir(PATH_site.$this->_getDirname($current['title']), true);
+    		        t3lib_div::rmdir(PATH_site.$this->_getDir($current['title']), true);
     		        $current['title'] = $fields['title'];
 		        }
 		        else
@@ -210,13 +261,34 @@ class tx_tstemplatebin
 	    }
 	}
 	
+	/**
+	 * Hook-function for t3lib_TCEmain:
+	 * Writes contents of fields in new rows to files and overrides the values for DB.
+	 * Adds file comment to config when this is the sample from tstemplate.
+	 * @see ext_localconf.php
+	 * 
+	 * @param string $status
+	 * @param string $table
+	 * @param integer $uid
+	 * @param array $fields
+	 * @param t3lib_TCEmain $tce
+	 */
 	public function processDatamap_afterDatabaseOperations($status, $table, $uid, &$fields, t3lib_TCEmain $tce)
 	{
 	    if ($table == 'sys_template' && $status == 'new' && isset($fields['title']))
 	    {
 	        $this->_id = (integer) $tce->substNEWwithIDs[$uid];
 	        
-	        $newFields = $this->_processFields($fields['title'], $fields);
+    	    if (isset($fields['config']) && strcmp($fields['config'], self::TS_SAMPLE) == 0)
+    	    {
+                // This is the sample from tstemplate - add file comment
+    	        $templateFile = $this->_getDir($fields['title']).$this->_fields['config'].$this->_fileExt;
+    	        $fields['config'] =
+                $this->_getFileComment(array('templateFile' => $templateFile)).
+                ltrim(self::TS_SAMPLE);
+    	    }
+	        
+    	    $newFields = $this->_processFields($fields['title'], $fields);
 	        if (count($newFields))
 	        {
 	            $GLOBALS['TYPO3_DB']->exec_UPDATEquery($table, 'uid='.$this->_id, $newFields);
@@ -225,6 +297,11 @@ class tx_tstemplatebin
 	    }
 	}
 	
+	/**
+	 * Get the current template row
+	 * 
+	 * @return array
+	 */
 	protected function _getCurrent()
 	{
 	    if (!$this->_id)
@@ -239,13 +316,20 @@ class tx_tstemplatebin
 		return $this->_current;
 	}
 	
+	/**
+	 * Checks if there is already a directory for $title
+	 * 
+	 * @param string $title The template title
+	 * @param boolean $notify Show a message if it exists
+	 * @return boolean
+	 */
 	protected function _checkTitle($title, $notify = false)
 	{
 	    if ($this->_prefixWithId)
 	    {
 	        return true;
 	    }
-	    $dir = $this->_getDirname($title);
+	    $dir = $this->_getDir($title);
 	    if (!is_dir(PATH_site.$dir))
 	    {
 	        return true;
@@ -264,9 +348,17 @@ class tx_tstemplatebin
         return false;
 	}
 	
+	/**
+	 * Writes field contents to files if they are not empty or the file
+	 * exists. Puts the include-code in field when succesfull.
+	 * 
+	 * @param string $title Template title
+	 * @param array $fields Fields to save
+	 * @return array Saved fields
+	 */
 	protected function _processFields($title, $fields)
 	{
-	    $dirname = $this->_getDirname($title, true);
+	    $dirname = $this->_getDir($title, true);
 		    
 	    $newFields = array();
 	    
@@ -274,7 +366,7 @@ class tx_tstemplatebin
 	    {
 	        if (array_key_exists($field, $fields))
 	        {
-	            $filename = $dirname.$file.'.txt';
+	            $filename = $dirname.$file.$this->_fileExt;
 	            $strlen = strlen(trim($fields[$field]));
 		        if ($strlen || file_exists(PATH_site.$filename))
 		        {
@@ -291,6 +383,18 @@ class tx_tstemplatebin
 	    return $newFields;
 	}
 	
+	/**
+	 * Parses the file comment from and returns it if enabled in extConf
+	 * Use placeholders in comment template if you like:
+	 * ${db_field} - Field from current sys_template-row
+	 * ${additionalParam} - Additional params, these are:
+	 * ${rootLine} - Path to the parent page of the template (breadcrumb)
+	 * ${templateFile} - The path to the file where template is saved
+	 * @see ext_localconf.php
+	 * 
+	 * @param array $addParams Additional params (key-value-pairs)
+	 * @return string
+	 */
 	protected function _getFileComment($addParams = array())
 	{
 	    if (!$this->_addComment)
@@ -320,9 +424,14 @@ class tx_tstemplatebin
 	}
 	
 	/**
-	 * @param unknown_type $row
+	 * Returns path to directory relative to PATH_site based on
+	 * $title and $this->_id (if set in extConf)
+	 * 
+	 * @param string $title Template title
+	 * @param bool $create If true creates the dir
+	 * @return string
 	 */
-	protected function _getDirname($title, $create = false)
+	protected function _getDir($title, $create = false)
 	{
 	    /* @var $basicFF t3lib_basicFileFunctions */
 	    $basicFF = t3lib_div::makeInstance('t3lib_basicFileFunctions');

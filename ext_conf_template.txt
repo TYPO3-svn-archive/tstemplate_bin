@@ -1,6 +1,9 @@
 # cat=basic; type=string; label=Template dir path: Directory relative to site path where the template directories will be put 
 path = fileadmin/template/ts/
 
+# cat=basic; type=string; label=File extension: Extension for template files
+fileExt = txt
+
 # cat=basic; type=boolean; label=Prefix with ID: Prefix template directories with the template-id (fi. 1-newSite/setup.txt)
 prefixWithId = 0
 
