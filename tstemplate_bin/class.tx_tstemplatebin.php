@@ -184,16 +184,19 @@ page.10.value = HELLO WORLD!
 	 */
 	protected function _includeBinFile($code, $file, $hsc = false)
 	{
-	    $pattern = '/\<INCLUDE_TYPOSCRIPT\:\s+source\="\s*FILE\:\s*'.addcslashes($file,'/\\').'\s*"\s*\>/i';
+	    $pattern = '/[\n\r\s]*\<INCLUDE_TYPOSCRIPT\:\s+source\="\s*FILE\:\s*'.addcslashes($file,'/\\').'\s*"\s*\>/i';
 	    if ($hsc)
 	    {
-	        $pattern = str_replace(array('\<','\>','"'), array('[\n\r]*&lt;','&gt;','&quot;'), $pattern);
+	        $pattern = str_replace(array('\<','\>','"'), array('&lt;','&gt;','&quot;'), $pattern);
 	        //$pattern = '/&lt;INCLUDE_TYPOSCRIPT:\s+source=&quot;\s*FILE:\s*(.*?)\s*&quot;\s*&gt;/i';
 	    }
 	    if (preg_match($pattern, $code, $match, PREG_OFFSET_CAPTURE))
 		{
-		    $content = t3lib_div::formatForTextarea($this->_readFile($file));
-		        
+		    $content = $this->_readFile($file);
+		    if ($hsc)
+		    {
+		        $content = t3lib_div::formatForTextarea($content);
+		    }
 		    return substr_replace($code, $content, $match[0][1], strlen($match[0][0]));
 		}
 		return $code;
