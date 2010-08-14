@@ -16,4 +16,13 @@ $TYPO3_CONF_VARS['EXTCONF']['tstemplate_bin']['fileComment'] =
  */
 
 ';
+
+//Very unfortunately the above does not work with t3editor :(
+//So:
+$TYPO3_CONF_VARS['EXTCONF']['tstemplate_bin']['fileComment'] = 
+'# Template ${title} (${uid}) in ${rootLine} (${pid})
+# Included from ${templateFile}
+# @version '.'$'.'Id'.'$
+
+';
 ?>
