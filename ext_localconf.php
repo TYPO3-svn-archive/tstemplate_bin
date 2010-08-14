@@ -22,7 +22,7 @@ $TYPO3_CONF_VARS['EXTCONF']['tstemplate_bin']['fileComment'] =
 $TYPO3_CONF_VARS['EXTCONF']['tstemplate_bin']['fileComment'] = 
 '# Template ${title} (${uid}) in ${rootLine} (${pid})
 # Included from ${templateFile}
-# @version '.'$'.'Id'.'$
+# '.'$'.'Id'.'$
 
 ';
 ?>
