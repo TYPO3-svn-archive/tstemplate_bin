@@ -497,4 +497,8 @@ page.10.value = HELLO WORLD!
 	    return $relPath;
 	}
 }
+
+if (defined('TYPO3_MODE') && $TYPO3_CONF_VARS[TYPO3_MODE]['XCLASS']['ext/tstemplate_bin/class.tx_tstemplatebin.php'])	{
+	include_once($TYPO3_CONF_VARS[TYPO3_MODE]['XCLASS']['ext/tstemplate_bin/class.tx_tstemplatebin.php']);
+}
 ?>
