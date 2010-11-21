@@ -32,48 +32,6 @@
  * @author     Christian Opitz <co@netzelf.de>
  */
 class tx_tstemplatebin {
-    const TS_SAMPLE = '
-# Default PAGE object:
-page = PAGE
-page.10 = TEXT
-page.10.value = HELLO WORLD!
-';
-    
-    const MODE_COMPAT = 'compat';
-    
-    const MODE_FULL = 'full';
-    
-    protected $_mode = 'compat';
-    
-    /**
-     * @var string The path where the template dirs will be created
-     */
-    protected $_path = 'fileadmin/template/ts/';
-    
-    /**
-     * @var boolean If template dirs should get prefixed with the template-uid
-     */
-    protected $_prefixWithId = false;
-    
-    /**
-     * @var boolean If comments should be added on first file creation
-     */
-    protected $_addComment = true;
-    
-    /**
-     * @var integer The current template-uid
-     */
-    protected $_id;
-    
-    /**
-     * @var array The current record
-     */
-    protected $_current;
-    
-    /**
-     * @var string File extension for template files
-     */
-    protected $_fileExt = '.txt';
     
     /**
      * @var array Field names as keys, file names as values
@@ -83,36 +41,9 @@ page.10.value = HELLO WORLD!
         'config'
     );
     
-    /**
-     * Set the vars from extConf
-     */
-    public function __construct() {
-        $conf = unserialize($GLOBALS['TYPO3_CONF_VARS']['EXT']['extConf']['tstemplate_bin']);
-        if (!is_array($conf)) {
-            return;
-        }
-        if (!empty($conf['path'])) {
-            $this->_path = $conf['path'];
-        }
-        if (isset($conf['mode']) && in_array($conf['mode'], array(self::MODE_COMPAT, self::MODE_FULL))) {
-            $this->_mode = $conf['mode'];
-        }
-        if (isset($conf['prefixWithId'])) {
-            $this->_prefixWithId = $conf['prefixWithId'] ? true : false;
-        }
-        if (isset($conf['addComment'])) {
-            $this->_addComment = $conf['addComment'] ? true : false;
-        }
-        if (!empty($conf['fileExt'])) {
-            $this->_fileExt = '.'.ltrim($conf['fileExt'],'.');
-        }
-    }
-    
 	/**
 	 * Hook-function for tx_tstemplateinfo:
 	 * Search for TS-includes in textareas for template module info/modify
-	 * Adds file comment if enabled in extConf and no include was found
-	 * @see _includeBinFile()
 	 * @see ext_localconf.php
 	 * 
 	 * @param array $parameters
@@ -132,21 +63,8 @@ page.10.value = HELLO WORLD!
 	}
 	
 	/**
-	 * Reads a template file
-	 * 
-	 * @param string $file
-	 * @return string
-	 */
-	protected function _readFile($file) {
-	    $path = t3lib_div::getFileAbsFileName($file);
-	    return is_readable($path) ? file_get_contents($path) : '';
-	}
-	
-	/**
 	 * Hook-function for t3lib_TCEmain:
 	 * Writes contents of fields to files and overrides the values for DB.
-	 * Checks if title is valid, if not rewrites it and shows a flash message
-	 * or looks for the next valid name when in template module
 	 * @see ext_localconf.php
 	 * 
 	 * @param string $status
@@ -173,6 +91,17 @@ page.10.value = HELLO WORLD!
 				}
 			}
 		}
+	}
+	
+	/**
+	 * Reads a template file
+	 * 
+	 * @param string $file
+	 * @return string
+	 */
+	protected function _readFile($file) {
+	    $path = t3lib_div::getFileAbsFileName($file);
+	    return is_readable($path) ? file_get_contents($path) : '';
 	}
 }
 
