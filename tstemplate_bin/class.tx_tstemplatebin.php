@@ -1,7 +1,7 @@
 <?php
 /**
  * TS
- * 
+ *
  * LICENSE
  *
  * This script is part of the TYPO3 project. The TYPO3 project is
@@ -19,7 +19,7 @@
  * GNU General Public License for more details.
  *
  * This copyright notice MUST APPEAR in all copies of the script!
- * 
+ *
  * @copyright  Copyright (c) 2010 Christian Opitz - Netzelf GbR (http://netzelf.de)
  * @license    http://www.gnu.org/copyleft/gpl.html GNU General Public License
  * @version    $Id$
@@ -32,7 +32,7 @@
  * @author     Christian Opitz <co@netzelf.de>
  */
 class tx_tstemplatebin {
-    
+
     /**
      * @var array Field names as keys, file names as values
      */
@@ -40,12 +40,12 @@ class tx_tstemplatebin {
         'constants',
         'config'
     );
-    
+
 	/**
 	 * Hook-function for tx_tstemplateinfo:
 	 * Search for TS-includes in textareas for template module info/modify
 	 * @see ext_localconf.php
-	 * 
+	 *
 	 * @param array $parameters
 	 * @param tx_tstemplateinfo $pObj
 	 */
@@ -53,20 +53,20 @@ class tx_tstemplatebin {
     	//$pattern = '/[\n\r\s]*(\<INCLUDE_TYPOSCRIPT\:\s+source\="\s*FILE\:\s*([^"]*?)\s*"\s*\>/i';
     	$pattern = '/^[ \t]*&lt;INCLUDE_TYPOSCRIPT\:\s+source\=&quot;\s*FILE\:\s*(.*)\s*&quot;\s*&gt;/mie';
     	$parameters['theOutput'] = preg_replace(
-    		$pattern, 
+    		$pattern,
     		'"### &lt;INCLUDE_TYPOSCRIPT: source=&quot;FILE:\\1&quot;&gt;".
     		t3lib_div::formatForTextarea($this->_readFile("\\1")).
     		"\n### &lt;/INCLUDE_TYPOSCRIPT&gt;"'
-    		, 
+    		,
     		$parameters['theOutput']
     	);
 	}
-	
+
 	/**
 	 * Hook-function for t3lib_TCEmain:
 	 * Writes contents of fields to files and overrides the values for DB.
 	 * @see ext_localconf.php
-	 * 
+	 *
 	 * @param string $status
 	 * @param string $table
 	 * @param integer $uid
@@ -77,13 +77,16 @@ class tx_tstemplatebin {
 	    if ($table != 'sys_template') {
 	        return;
 	    }
-		$pattern = '/### \<INCLUDE_TYPOSCRIPT\:\s+source\="\s*FILE\:([^"]*)"\s*\>\s*\n(.*?)\n### \<\/INCLUDE_TYPOSCRIPT\>/s';
+		$pattern = '/### \<INCLUDE_TYPOSCRIPT\:\s+source\="\s*FILE\:([^"]*)"\s*\>\s*\n(.*?)\R### \<\/INCLUDE_TYPOSCRIPT\>/s';
 		foreach ($this->_fields as $field) {
 			if (preg_match_all($pattern, $fields[$field], $matches, PREG_SET_ORDER)) {
 				foreach ($matches as $match) {
-					$path = PATH_site.$match[1];
+					$path = t3lib_div::getFileAbsFileName($match[1]);
+					if (!$path) {
+					    continue;
+					}
 					if (!file_exists($path) && !is_dir(dirname($path))) {
-				        t3lib_div::mkdir_deep(PATH_site, $match[1]);
+				        t3lib_div::mkdir_deep(PATH_site, substr(dirname($path), strlen(PATH_site)));
 				    }
 				    if (t3lib_div::writeFile($path, $match[2])) {
 				    	$fields[$field] = str_replace($match[0], '<INCLUDE_TYPOSCRIPT: source="FILE:'.$match[1].'">', $fields[$field]);
@@ -92,10 +95,10 @@ class tx_tstemplatebin {
 			}
 		}
 	}
-	
+
 	/**
 	 * Reads a template file
-	 * 
+	 *
 	 * @param string $file
 	 * @return string
 	 */
